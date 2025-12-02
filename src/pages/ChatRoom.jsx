@@ -262,7 +262,12 @@ function ChatRoom() {
   }
 
   const formatTime = (timestamp) => {
-    const date = new Date(timestamp)
+    // Ensure timestamp is treated as UTC if it doesn't have timezone info
+    let dateStr = timestamp
+    if (typeof timestamp === 'string' && !timestamp.endsWith('Z') && !timestamp.includes('+')) {
+      dateStr = timestamp + 'Z'
+    }
+    const date = new Date(dateStr)
     return date.toLocaleTimeString('en-IN', { 
       timeZone: 'Asia/Kolkata',
       hour: '2-digit', 

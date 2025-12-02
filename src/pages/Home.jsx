@@ -53,9 +53,6 @@ function Home() {
         </div>
       </div>
 
-      <footer className="footer">
-        Made with ❤️ by Rohan Akula
-      </footer>
     </div>
   )
 }
