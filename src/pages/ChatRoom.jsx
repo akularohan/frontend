@@ -18,8 +18,12 @@ function ChatRoom() {
   const [timeLeft, setTimeLeft] = useState('')
   const [expireAt, setExpireAt] = useState(null)
   const [showUsers, setShowUsers] = useState(false)
+  const [replyTo, setReplyTo] = useState(null)
+  const [showImageModal, setShowImageModal] = useState(null)
+  const [isDragging, setIsDragging] = useState(false)
   const messagesEndRef = useRef(null)
   const wsRef = useRef(null)
+  const fileInputRef = useRef(null)
   
   const username = location.state?.username
 
@@ -29,13 +33,20 @@ function ChatRoom() {
       return
     }
 
-    // Fetch room info
     fetchRoomInfo()
-    
-    // Connect to WebSocket
     connectWebSocket()
 
+    // Handle visibility change to prevent disconnection on mobile
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN)) {
+        connectWebSocket()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       if (wsRef.current) {
         wsRef.current.close()
       }
@@ -55,7 +66,6 @@ function ChatRoom() {
 
       if (diff <= 0) {
         setTimeLeft('Expired')
-        // Redirect to home after 2 seconds
         setTimeout(() => {
           navigate('/')
         }, 2000)
@@ -92,7 +102,6 @@ function ChatRoom() {
           setExpireAt(expireDate)
         }
       } else if (response.status === 410 || response.status === 404) {
-        // Room expired or not found
         navigate('/')
       }
     } catch (error) {
@@ -101,6 +110,10 @@ function ChatRoom() {
   }
 
   const connectWebSocket = () => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      return
+    }
+
     const ws = new WebSocket(`${WS_BASE}/ws/${encodeURIComponent(roomName)}/${username}`)
     
     ws.onopen = () => {
@@ -111,31 +124,42 @@ function ChatRoom() {
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data)
       
-      if (data.type === 'message') {
+      if (data.type === 'history') {
+        setMessages(data.messages.map((msg, idx) => ({
+          id: `history-${idx}`,
+          username: msg.username,
+          content: msg.content,
+          message_type: msg.message_type || 'text',
+          timestamp: msg.timestamp,
+          type: 'message',
+          reply_to: msg.reply_to
+        })))
+      } else if (data.type === 'message') {
         setMessages(prev => [...prev, {
-          id: Date.now(),
+          id: Date.now() + Math.random(),
           username: data.username,
           content: data.content,
           message_type: data.message_type || 'text',
           timestamp: data.timestamp,
-          type: 'message'
+          type: 'message',
+          reply_to: data.reply_to
         }])
       } else if (data.type === 'user_joined') {
         setMessages(prev => [...prev, {
-          id: Date.now(),
+          id: Date.now() + Math.random(),
           content: `${data.username} joined the room`,
           timestamp: data.timestamp,
           type: 'system'
         }])
-        fetchRoomInfo() // Refresh user list
+        fetchRoomInfo()
       } else if (data.type === 'user_left') {
         setMessages(prev => [...prev, {
-          id: Date.now(),
+          id: Date.now() + Math.random(),
           content: `${data.username} left the room`,
           timestamp: data.timestamp,
           type: 'system'
         }])
-        fetchRoomInfo() // Refresh user list
+        fetchRoomInfo()
       }
     }
     
@@ -157,23 +181,22 @@ function ChatRoom() {
     if (newMessage.trim() && wsRef.current && connected) {
       wsRef.current.send(JSON.stringify({
         type: 'text',
-        content: newMessage.trim()
+        content: newMessage.trim(),
+        reply_to: replyTo
       }))
       setNewMessage('')
+      setReplyTo(null)
     }
   }
 
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0]
+  const handleFileSelect = (file) => {
     if (!file) return
 
-    // Check file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      alert('Image size must be less than 5MB')
+      alert('File size must be less than 5MB')
       return
     }
 
-    // Check file type
     if (!file.type.startsWith('image/')) {
       alert('Please select an image file')
       return
@@ -184,12 +207,37 @@ function ChatRoom() {
       if (wsRef.current && connected) {
         wsRef.current.send(JSON.stringify({
           type: 'image',
-          content: event.target.result
+          content: event.target.result,
+          reply_to: replyTo
         }))
+        setReplyTo(null)
       }
     }
     reader.readAsDataURL(file)
-    e.target.value = '' // Reset input
+  }
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0]
+    handleFileSelect(file)
+    e.target.value = ''
+  }
+
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e) => {
+    e.preventDefault()
+    setIsDragging(false)
+  }
+
+  const handleDrop = (e) => {
+    e.preventDefault()
+    setIsDragging(false)
+    
+    const file = e.dataTransfer.files[0]
+    handleFileSelect(file)
   }
 
   const leaveRoom = async () => {
@@ -212,9 +260,11 @@ function ChatRoom() {
   }
 
   const formatTime = (timestamp) => {
-    return new Date(timestamp).toLocaleTimeString([], { 
+    const date = new Date(timestamp)
+    return date.toLocaleTimeString([], { 
       hour: '2-digit', 
-      minute: '2-digit' 
+      minute: '2-digit',
+      hour12: true
     })
   }
 
@@ -224,8 +274,41 @@ function ChatRoom() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const handleReply = (message) => {
+    setReplyTo({
+      username: message.username,
+      content: message.content,
+      message_type: message.message_type
+    })
+  }
+
+  const cancelReply = () => {
+    setReplyTo(null)
+  }
+
+  const openImageModal = (src) => {
+    setShowImageModal(src)
+  }
+
+  const closeImageModal = () => {
+    setShowImageModal(null)
+  }
+
   return (
-    <div className="chat-room">
+    <div 
+      className="chat-room"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {isDragging && (
+        <div className="drag-overlay">
+          <div className="drag-content">
+            📎 Drop image here
+          </div>
+        </div>
+      )}
+
       <div className="chat-header">
         <div className="room-info">
           <h2>{roomName}</h2>
@@ -265,6 +348,15 @@ function ChatRoom() {
         </div>
       )}
 
+      {showImageModal && (
+        <div className="image-modal-overlay" onClick={closeImageModal}>
+          <div className="image-modal-content">
+            <button className="close-modal-btn" onClick={closeImageModal}>✕</button>
+            <img src={showImageModal} alt="Full size" />
+          </div>
+        </div>
+      )}
+
       <div className="chat-container">
         <div className="messages-container">
           {messages.map((message) => (
@@ -278,16 +370,39 @@ function ChatRoom() {
                     <span className="username">{message.username}</span>
                     <span className="timestamp">{formatTime(message.timestamp)}</span>
                   </div>
+                  
+                  {message.reply_to && (
+                    <div className="reply-preview">
+                      <div className="reply-bar"></div>
+                      <div className="reply-content">
+                        <span className="reply-username">{message.reply_to.username}</span>
+                        {message.reply_to.message_type === 'image' ? (
+                          <span className="reply-text">📷 Image</span>
+                        ) : (
+                          <span className="reply-text">{message.reply_to.content.substring(0, 50)}{message.reply_to.content.length > 50 ? '...' : ''}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {message.message_type === 'image' ? (
                     <img 
                       src={message.content} 
                       alt="Shared image" 
                       className="message-image"
-                      onClick={() => window.open(message.content, '_blank')}
+                      onClick={() => openImageModal(message.content)}
                     />
                   ) : (
                     <div className="message-content">{message.content}</div>
                   )}
+                  
+                  <button 
+                    className="reply-btn" 
+                    onClick={() => handleReply(message)}
+                    title="Reply"
+                  >
+                    ↩
+                  </button>
                 </>
               ) : (
                 <div className="system-message">{message.content}</div>
@@ -296,6 +411,18 @@ function ChatRoom() {
           ))}
           <div ref={messagesEndRef} />
         </div>
+
+        {replyTo && (
+          <div className="reply-bar-container">
+            <div className="reply-bar-content">
+              <span className="reply-label">Replying to {replyTo.username}</span>
+              <span className="reply-preview-text">
+                {replyTo.message_type === 'image' ? '📷 Image' : replyTo.content.substring(0, 50)}
+              </span>
+            </div>
+            <button className="cancel-reply-btn" onClick={cancelReply}>✕</button>
+          </div>
+        )}
 
         <form className="message-form" onSubmit={sendMessage}>
           <input
@@ -307,8 +434,9 @@ function ChatRoom() {
             maxLength={500}
           />
           <input
+            ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,image/gif"
             onChange={handleImageUpload}
             style={{ display: 'none' }}
             id="image-upload"

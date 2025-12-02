@@ -406,4 +406,22 @@
     padding: 12px 20px;
     font-size: 0.8rem;
   }
+
+  .footer {
+    font-size: 0.75rem;
+  }
+}
+
+/* Footer */
+.footer {
+  position: fixed;
+  bottom: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(0, 255, 0, 0.6);
+  font-family: 'Ndot 57', monospace;
+  font-size: 0.85rem;
+  letter-spacing: 1px;
+  z-index: 1000;
+  text-align: center;
 }
