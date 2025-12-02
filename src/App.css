@@ -1,4 +1,4 @@
-.app {
+﻿.app {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -311,7 +311,7 @@
 }
 
 .tips-content ul li::before {
-  content: '→';
+  content: 'â†’';
   position: absolute;
   left: 0;
   color: #00ff00;
