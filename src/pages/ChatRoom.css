@@ -494,6 +494,22 @@
   text-overflow: ellipsis;
 }
 
+.reply-image-preview {
+  max-width: 80px;
+  max-height: 60px;
+  border-radius: 4px;
+  object-fit: cover;
+  margin-top: 4px;
+}
+
+.reply-image-preview-small {
+  max-width: 60px;
+  max-height: 40px;
+  border-radius: 4px;
+  object-fit: cover;
+  margin-top: 4px;
+}
+
 .reply-bar-container {
   display: flex;
   align-items: center;

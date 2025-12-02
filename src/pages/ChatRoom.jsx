@@ -123,8 +123,10 @@ function ChatRoom() {
     
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data)
+      console.log('WebSocket message received:', data.type, data)
       
       if (data.type === 'history') {
+        console.log('Loading history:', data.messages.length, 'messages')
         setMessages(data.messages.map((msg, idx) => ({
           id: `history-${idx}`,
           username: msg.username,
@@ -261,7 +263,8 @@ function ChatRoom() {
 
   const formatTime = (timestamp) => {
     const date = new Date(timestamp)
-    return date.toLocaleTimeString([], { 
+    return date.toLocaleTimeString('en-IN', { 
+      timeZone: 'Asia/Kolkata',
       hour: '2-digit', 
       minute: '2-digit',
       hour12: true
@@ -377,7 +380,11 @@ function ChatRoom() {
                       <div className="reply-content">
                         <span className="reply-username">{message.reply_to.username}</span>
                         {message.reply_to.message_type === 'image' ? (
-                          <span className="reply-text">📷 Image</span>
+                          <img 
+                            src={message.reply_to.content} 
+                            alt="Reply preview" 
+                            className="reply-image-preview"
+                          />
                         ) : (
                           <span className="reply-text">{message.reply_to.content.substring(0, 50)}{message.reply_to.content.length > 50 ? '...' : ''}</span>
                         )}
@@ -416,9 +423,17 @@ function ChatRoom() {
           <div className="reply-bar-container">
             <div className="reply-bar-content">
               <span className="reply-label">Replying to {replyTo.username}</span>
-              <span className="reply-preview-text">
-                {replyTo.message_type === 'image' ? '📷 Image' : replyTo.content.substring(0, 50)}
-              </span>
+              {replyTo.message_type === 'image' ? (
+                <img 
+                  src={replyTo.content} 
+                  alt="Reply preview" 
+                  className="reply-image-preview-small"
+                />
+              ) : (
+                <span className="reply-preview-text">
+                  {replyTo.content.substring(0, 50)}
+                </span>
+              )}
             </div>
             <button className="cancel-reply-btn" onClick={cancelReply}>✕</button>
           </div>
@@ -447,7 +462,7 @@ function ChatRoom() {
             className={`image-btn ${!connected ? 'disabled' : ''}`}
             title="Send image"
           >
-            📷
+            🖼️
           </label>
           <button type="submit" disabled={!connected || !newMessage.trim()}>
             Send
